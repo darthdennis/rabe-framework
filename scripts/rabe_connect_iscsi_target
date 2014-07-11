@@ -1,0 +1,33 @@
+#!/bin/bash
+
+# set regular expression pattern for IP address
+IPPATTERN="^10\.8\.0\.[1-2]?[0-9]?[0-9]{1}$"
+
+echo ""
+
+# set IP address of client
+until [[ $IPADDRESS =~ $IPPATTERN ]]
+do
+	echo Enter the VPN IP address of the client \[10.8.0.###\]:
+	read TARGETIP
+done
+
+# discover iSCSI target(s) on client
+echo ""
+echo Discovering iSCSI targets on client ...
+iscsiadm -m discovery -t st -p $TARGETIP | grep '10.8.0'
+
+# set iSCSI target
+echo ""
+echo Enter the name of the iSCSI target:
+read TARGET
+
+# connect to iSCSI target:
+echo ""
+echo Connecting to target $TARGET on $TARGETIP ...
+iscsiadm -m node -p $TARGETIP -T $TARGET -l
+
+# show target's storage device name on server
+echo ""
+echo Target $TARGET connected to:
+tail dmesg | grep 'iSCSI'

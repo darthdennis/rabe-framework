@@ -1,0 +1,263 @@
+#!/bin/bash
+
+# check arguments
+if [[ $1 == "--help" ]];
+then
+	echo ""
+	echo Remote Acquisition Boot Environment \(RABE\) authoring tool
+	echo =========================================================
+	echo ""
+	echo This tool provides an interface for remastering the RABE iso file with network, iptables and OpenVPN settings.
+	echo ""
+	echo Syntax: ./rabe_authoring_tool \[iso-file\] \[iso-destination\] \[pxe-destination\]
+	echo ""
+	echo " [iso-file] the source RABE iso file"
+	echo " [iso-destination] the destination path including file name for the iso file"
+	echo " [pxe-destination] the destination path for the pxe extraction of the iso file"
+	echo ""
+	exit
+else
+	if [[ -z $1 ]];
+	then
+		echo ""
+		echo RABE authoring tool requires a RABE iso file as an argument! Exiting!
+		echo ""
+		exit
+	else
+		ISOSRC=$1
+	fi
+	if [[ -z $2 ]];
+	then
+		ISODST="../rabe_$(date +%Y%m%d%H%M).iso"
+	else
+		ISODST=$2
+	fi
+fi
+
+# set regular expression pattern for IP address
+IPPATTERN="^[1-2]?[0-9]?[0-9]{1}\.[1-2]?[0-9]?[0-9]{1}\.[1-2]?[0-9]?[0-9]{1}\.[1-2]?[0-9]?[0-9]{1}$"
+
+echo ""
+echo \[START USER INPUT\]
+
+# set network configuration
+echo ""
+echo Set static network configuration \[y/n\]:
+read NETWORK
+
+if [[ $NETWORK == y* ]];
+then
+	# set static IP address
+	echo ""
+	until [[ $IPADDRESS =~ $IPPATTERN ]]
+	do
+		echo Enter the IP address of the client \[###.###.###.###\]:
+		read IPADDRESS
+	done
+	
+	# set netmask
+	echo ""
+	until [[ $NETMASK =~ $IPPATTERN ]]
+	do
+		echo Enter the netmask of the network \[###.###.###.###\]:
+		read NETMASK
+	done
+	
+	# set gateway
+	echo ""
+	until [[ $GATEWAY =~ $IPPATTERN ]]
+	do
+		echo Enter the gateway of the network \[###.###.###.###\]:
+		read GATEWAY
+	done
+fi
+
+# set IP address of remote server
+echo ""
+until [[ $SERVER =~ $IPPATTERN ]]
+do
+	echo Enter the IP address of the remote server \[###.###.###.###\]:
+	read SERVER
+done
+
+echo ""
+echo Are the OpenVPN server certificate \(ca.crt\), key \(ca.key\), index \(index.txt\) and serial in the openvpn/keys folder \[y/n\]: 
+read OPENVPN
+
+if [[ $OPENVPN == y* ]];
+then
+	# copy temporary easy-rsa files
+	cp /usr/share/easy-rsa/build-key openvpn/
+	cp /usr/share/easy-rsa/openssl-1.0.0.cnf openvpn/
+	cp /usr/share/easy-rsa/pkitool openvpn/
+	cp /usr/share/easy-rsa/vars openvpn/
+	cp /usr/share/easy-rsa/whichopensslcnf openvpn/
+	
+	# set source file
+	cd openvpn
+	source vars
+	
+	# generate client certificate and key
+	./build-key rabe_client
+	
+	# go to parent directory
+	cd ..
+else
+	echo ""
+	echo RABE authoring tool requires OpenVPN server ca.crt, ca.key, index.txt and serial files in openvpn/keys folder! Exiting!
+	echo ""
+	exit
+fi
+
+echo ""
+echo \[END USER INPUT\]
+echo ""
+
+# mount iso
+mkdir mntiso
+mount -o loop $ISOSRC mntiso
+
+# extract iso contents
+mkdir livecd
+rsync --exclude=/casper/filesystem.squahshfs -a mntiso/ livecd
+
+# extract squashfs
+mkdir edit
+unsquashfs mntiso/casper/filesystem.squashfs
+mv squashfs-root/* edit
+
+# copy network settings for chroot
+cp /etc/resolv.conf edit/etc/
+cp /etc/hosts edit/etc/
+
+# copy chroot scripts
+cp scripts/start edit/
+cp scripts/end edit/
+
+# mount dev for chroot
+mount --bind /dev/ edit/dev
+
+echo ""
+echo Type ./start to start working in the chroot environment.
+echo ""
+
+# enter chroot
+chroot edit
+
+# umount dev for chroot
+umount edit/dev || umount -lf edit/dev
+
+# remove chroot scripts
+rm edit/start
+rm edit/end
+
+# append network settings and related firewall rule
+if [[ $NETWORK == y* ]];
+then
+# append network settings to configuration file (static IP)
+	echo iface eth0 inet static >> edit/etc/network/interfaces_new
+	echo address $IPADDRESS >> edit/etc/network/interfaces_new
+	echo netmask $NETMASK >> edit/etc/network/interfaces_new
+	echo gateway $GATEWAY >> edit/etc/network/interfaces_new
+else
+	# append network settings to configuration file (DHCP)
+	echo iface eth0 inet dhcp >> edit/etc/network/interfaces_new
+	
+	# append firewall rule to configuration file (allow DHCP)
+	echo -A INPUT -i eth0 -p udp --dport 67:68 --sport 67:68 -m state --state NEW,ESTABLISHED -j ACCEPT >> edit/etc/iptables/rules.v4
+fi
+
+# append firewall rules to configuration file (allow all remote server)
+echo -A INPUT -i eth0 -s $SERVER -m state --state NEW,RELATED,ESTABLISHED -j ACCEPT >> edit/etc/iptables/rules.v4
+
+if [[ $OPENVPN == y* ]];
+then
+	# copy/move OpenVPN client certificate and key files
+	cp openvpn/keys/ca.crt edit/etc/openvpn
+	mv openvpn/keys/rabe_client.crt edit/etc/openvpn
+	mv openvpn/keys/rabe_client.key edit/etc/openvpn
+	
+	# replace in OpenVPN client configuration file
+	sed -i "s/<SERVER>/$SERVER/g" edit/etc/openvpn/rabe_client.conf
+	
+	# append firewall rules to configuration file (allow all OpenVPN server)
+	echo -A INPUT -i tun0 -s 10.8.0.1 -m state --state NEW,RELATED,ESTABLISHED -j ACCEPT >> edit/etc/iptables/rules.v4
+	
+	# remove temporary easy-rsa files
+	rm openvpn/build-key
+	rm openvpn/openssl-1.0.0.cnf
+	rm openvpn/pkitool
+	rm openvpn/vars
+	rm openvpn/whichopensslcnf
+	
+	# remove temporary signing request file
+	rm openvpn/keys/rabe_client.csr
+fi
+
+# append firewall rules to configuration file (block all other)
+echo -A INPUT -j DROP >> edit/etc/iptables/rules.v4
+echo COMMIT >> edit/etc/iptables/rules.v4
+
+# regenerate manifest
+chmod +w livecd/casper/filesystem.manifest
+chroot edit dpkg-query -W --showformat='${Package} ${Version}\n' > livecd/casper/filesystem.manifest
+cp livecd/casper/filesystem.manifest livecd/casper/filesystem.manifest-desktop
+sed -i '/ubiquity/d' livecd/casper/filesystem.manifest-desktop
+sed -i '/casper/d' livecd/casper/filesystem.manifest-desktop
+
+# compress filesystem
+rm livecd/casper/filesystem.squashfs 
+mksquashfs edit livecd/casper/filesystem.squashfs
+
+# update filesystem.size file
+printf $(du -sx --block-size=1 edit | cut -f1) > livecd/casper/filesystem.size
+
+# update md5sum.txt file
+cd livecd/
+find -type f -print0 | sudo xargs -0 md5sum | grep -v isolinux/boot.cat | tee md5sum.txt
+
+# create new iso
+mkisofs -D -r -V "$IMAGE_NAME" -cache-inodes -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o $ISODST .
+
+# go to parent directory
+cd ..
+
+# unmount iso
+umount mntiso
+
+# remove directories
+rm -R mntiso
+rm -R livecd
+rm -R edit
+rm -R squashfs-root
+
+# extract new iso for PXE
+echo ""
+echo Extract files for PXE \[y/n\]: 
+read PXE
+
+if [[ $PXE == y* ]];
+then
+	if [[ -z $3 ]];
+	then
+		PXEDST="pxe/"
+		mkdir $PXEDST
+	else
+		PXEDST=$3
+	fi
+	
+	# mount new iso
+	mkdir mntnewiso
+	mount -o loop $(echo $ISODST | sed 's/..\///g') mntnewiso
+	
+	# copy files for pxe
+	cp -R mntnewiso/* $PXEDST
+	
+	# unmount iso
+	umount mntnewiso
+	
+	# remove directory
+	rm -R mntnewiso
+else
+	exit
+fi

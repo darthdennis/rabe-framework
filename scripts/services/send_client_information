@@ -1,0 +1,63 @@
+#!/bin/bash
+
+# SERVICE: send_client_information
+# USAGE: start
+
+case "$1" in
+start)
+	echo \[send_client_information\] starting service
+	
+	echo \[send_client_information\] mounting NFS share
+		
+	# mount the NFS share
+	mkdir /mnt/nfs
+	mount 10.8.0.1:<NFSPATH> /mnt/nfs
+	
+	echo \[send_client_information\] appending network information \(ifconfig\)
+	
+	# extract IP address (eth0) from ifconfig
+	IP=$(ifconfig eth0 | grep -i 'inet addr' | awk '{print $2}' | sed 's/addr://g')
+	
+	# extract IP address (tun0) from ifconfig
+	VPNIP=$(ifconfig tun0 | grep -i 'inet addr' | awk '{print $2}' | sed 's/addr://g')
+	
+	# date and time (of start/creation)
+	DATE=$(date +%Y%m%d%H%M)
+	
+	# file name of log file
+	LOGNAME=$(echo "$DATE"-"$IP"-"$VPNIP" | sed 's/\./_/g')
+	LOGFILE=/mnt/nfs/"$LOGNAME".txt
+		
+	# add/append network information to log file
+	echo IP ADDRESS: $IP > $LOGFILE
+	echo VPN IP ADDRESS: $VPNIP >> $LOGFILE
+	
+	echo \[send_client_information\] appending iSCSI targets \(\/etc\/iet\/ietd.conf\)
+	
+	# append iSCSI targets to log file
+	echo "" >> $LOGFILE
+	echo "iSCSI TARGETS:" >> $LOGFILE
+	echo "==============" >> $LOGFILE
+	cat /etc/iet/ietd.conf | grep '^Target ' | sed 's/Target //g' >> $LOGFILE
+	
+	echo \[send_client_information\] appending disk information \(lshw\)
+	
+	# append disk information to log file
+	echo "" >> $LOGFILE
+	echo "DISK INFORMATION:" >> $LOGFILE
+	echo "=================" >> $LOGFILE
+	lshw -c disk >> $LOGFILE
+	
+	echo \[send_client_information\] unmounting NFS share
+	
+	# unmount the NFS share
+	umount /mnt/nfs
+;;
+
+*)
+echo SERVICE: send_client_information
+echo $"USAGE: $0 {start}"
+exit 1
+
+esac
+exit 0

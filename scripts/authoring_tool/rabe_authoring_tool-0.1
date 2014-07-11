@@ -1,0 +1,137 @@
+#!/bin/bash
+
+# check arguments
+if [[ $1 == "--help" ]];
+then
+	echo ""
+	echo Remote Acquisition Boot Environment \(RABE\) authoring tool
+	echo =========================================================
+	echo ""
+	echo This tool provides an interface for remastering the RABE iso file with network, iptables and OpenVPN settings.
+	echo ""
+	echo Syntax: ./rabe_authoring_tool \[iso-file\] \[iso-destination\] \[pxe-destination\]
+	echo ""
+	echo " [iso-file] the source RABE iso file"
+	echo " [iso-destination] the destination path including file name for the iso file"
+	echo " [pxe-destination] the destination path for the pxe extraction of the iso file"
+	echo ""
+	exit
+else
+	if [[ -z $1 ]];
+	then
+		echo ""
+		echo RABE authoring tool requires a RABE iso file as an argument! Exiting!
+		echo ""
+		exit
+	else
+		ISOSRC=$1
+	fi
+	if [[ -z $2 ]];
+	then
+		ISODST="../rabe_$(date +%Y%m%d%H%M).iso"
+	else
+		ISODST=$2
+	fi
+fi
+
+# mount iso
+mkdir mntiso
+mount -o loop $ISOSRC mntiso
+
+# extract iso contents
+mkdir livecd
+rsync --exclude=/casper/filesystem.squahshfs -a mntiso/ livecd
+
+# extract squashfs
+mkdir edit
+unsquashfs mntiso/casper/filesystem.squashfs
+mv squashfs-root/* edit
+
+# copy network settings for chroot
+cp /etc/resolv.conf edit/etc/
+cp /etc/hosts edit/etc/
+
+# copy chroot scripts
+cp scripts/start edit/
+cp scripts/end edit/
+
+# mount dev for chroot
+mount --bind /dev/ edit/dev
+
+echo ""
+echo Type ./start to start working in the chroot environment.
+echo ""
+
+# enter chroot
+chroot edit
+
+# umount dev for chroot
+umount edit/dev || umount -lf edit/dev
+
+# remove chroot scripts
+rm edit/start
+rm edit/end
+
+# regenerate manifest
+chmod +w livecd/casper/filesystem.manifest
+chroot edit dpkg-query -W --showformat='${Package} ${Version}\n' > livecd/casper/filesystem.manifest
+cp livecd/casper/filesystem.manifest livecd/casper/filesystem.manifest-desktop
+sed -i '/ubiquity/d' livecd/casper/filesystem.manifest-desktop
+sed -i '/casper/d' livecd/casper/filesystem.manifest-desktop
+
+# compress filesystem
+rm livecd/casper/filesystem.squashfs 
+mksquashfs edit livecd/casper/filesystem.squashfs
+
+# update filesystem.size file
+printf $(du -sx --block-size=1 edit | cut -f1) > livecd/casper/filesystem.size
+
+# update md5sum.txt file
+cd livecd/
+find -type f -print0 | sudo xargs -0 md5sum | grep -v isolinux/boot.cat | tee md5sum.txt
+
+# create new iso
+mkisofs -D -r -V "$IMAGE_NAME" -cache-inodes -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o $ISODST .
+
+# go to parent directory
+cd ..
+
+# unmount iso
+umount mntiso
+
+# remove directories
+rm -R mntiso
+rm -R livecd
+rm -R edit
+rm -R squashfs-root
+
+# extract new iso for PXE
+echo ""
+echo Extract files for PXE \[y/n\]: 
+read PXE
+
+if [[ $PXE == y* ]];
+then
+	if [[ -z $3 ]];
+	then
+		PXEDST="pxe/"
+		mkdir $PXEDST
+	else
+		PXEDST=$3
+	fi
+	
+	# mount new iso
+	mkdir mntnewiso
+	mount -o loop $(echo $ISODST | sed 's/..\///g') mntnewiso
+	
+	# copy files for pxe
+	cp -R mntnewiso/* $PXEDST
+	
+	# unmount iso
+	umount mntnewiso
+	
+	# remove directory
+	rm -R mntnewiso
+else
+	exit
+fi

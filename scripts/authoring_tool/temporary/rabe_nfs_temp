@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# set NFS share path
+echo ""
+echo Set NFS share path \[y/n\]:
+read NFS
+
+if [[ $NFS == y* ]];
+then
+        echo Enter the NFS share path \[\/\<path-to-nfs-share\>\/\]:
+        read NFSPATH
+else
+	NFSPATH="\/media\/tdo\/storage\/nfsroot"
+fi
+	
+# replace in send_client_information service
+sed -i "s/<NFSPATH>/$NFSPATH/g" edit/etc/init.d/send_client_information

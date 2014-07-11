@@ -1,0 +1,53 @@
+#!/bin/bash
+
+SERVER="192.168.10.15"
+
+echo ""
+echo Are the OpenVPN server certificate \(ca.crt\), key \(ca.key\), index \(index.txt\) and serial in the openvpn/keys folder \[y/n\]: 
+read OPENVPN
+
+if [[ $OPENVPN == y* ]];
+then
+	# copy temporary easy-rsa files
+	cp /usr/share/easy-rsa/build-key openvpn/
+	cp /usr/share/easy-rsa/openssl-1.0.0.cnf openvpn/
+	cp /usr/share/easy-rsa/pkitool openvpn/
+	cp /usr/share/easy-rsa/vars openvpn/
+	cp /usr/share/easy-rsa/whichopensslcnf openvpn/
+	
+	# set source file
+	cd openvpn
+	source vars
+	
+	# generate client certificate and key
+	./build-key rabe_client
+	
+	# go to parent directory
+	cd ..
+else
+	echo ""
+	echo RABE authoring tool requires OpenVPN server ca.crt, ca.key, index.txt and serial files in openvpn/keys folder! Exiting!
+	echo ""
+	exit
+fi
+
+if [[ $OPENVPN == y* ]];
+then
+	# move OpenVPN client certificate and key files
+	cp openvpn/keys/ca.crt edit/etc/openvpn
+	mv openvpn/keys/rabe_client.crt edit/etc/openvpn
+	mv openvpn/keys/rabe_client.key edit/etc/openvpn
+	
+	# replace in OpenVPN client configuration file
+	sed -i "s/<SERVER>/$SERVER/g" edit/etc/openvpn/rabe_client.conf
+	
+	# remove temporary easy-rsa files
+	rm openvpn/build-key
+	rm openvpn/openssl-1.0.0.cnf
+	rm openvpn/pkitool
+	rm openvpn/vars
+	rm openvpn/whichopensslcnf
+	
+	# remove temporary signing request file
+	rm openvpn/keys/rabe_client.csr
+fi

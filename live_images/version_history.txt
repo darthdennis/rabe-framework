@@ -1,0 +1,30 @@
+rabe-0.5_ubuntu-14.04-desktop-i386:
+===================================
+- installed nfs-common (touch) [/etc/init.d/statd] [/etc/init.d/gssd] [/etc/init.d/idmapd]
+- changed service script 'set_network_interfaces' (auto-start, 15) [/etc/init.d/set_network_interfaces]
+- changed service script 'set_iscsi_targets' (auto-start, 19) [/etc/init.d/set_iscsi_targets]
+- added service script 'send_client_information' (auto-start, 21) [/etc/init.d/send_client_information]
+
+rabe-0.4_ubuntu-14.04-desktop-i386:
+===================================
+- purged network-manager, account-plugin-aim* account-plugin-jabber* account-plugin-salut* account-plugin-yahoo* activity-log-manager* aisleriot brasero* checkbox-gui cheese* cheese-common* deja-dup* empathy* eog evince* evolution-data-server-online-accounts example-content firefox* gcr gnome-bluetooth* gnome-contacts gnome-font-viewer gnome-mahjongg gnome-mines gnome-orca gnome-power-manager gnome-sudoku gucharmap* ibus im-config indicator-bluetooth* landscape-client-ui-install language-selector-gnome libcheese-gtk23* libreoffice* mcp-account-manager-uoa* nautilus-sendto-empathy network-manager* printer-driver-foo2zjs-common* remmina* seahorse* shotwell* simple-scan* software-properties-gtk* system-config-printer-gnome thunderbird* totem* transmission-gtk ubiquity unity-control-center-signon* unity-lens-photos* unity-scope-gdrive unity-webapps* update-manager* vino webaccounts-extension-common* webbrowser-app* xdiagnose xterm xul-ext-ubufox xul-ext-webaccounts* yelp*
+
+rabe-0.3_ubuntu-14.04-desktop-i386:
+===================================
+- installed openvpn
+- set 'rabe_client' OpenVPN connection (auto-start) [/etc/default/openvpn]
+- set 'rabe_client' OpenVPN file [/etc/openvpn/rabe_client.conf] 
+
+rabe-0.2_ubuntu-14.04-desktop-i386:
+===================================
+- installed iptables-persistent
+- purged network-manager
+- added service script 'set_network_interfaces' (auto-start) [/etc/init.d/set_network_interfaces]
+- set default interfaces file [/etc/network/interfaces] [/etc/network/interfaces_new]
+- set default rules.v4 file [/etc/iptables/rules.v4]
+
+rabe-0.1_ubuntu-14.04-desktop-i386:
+===================================
+- installed vim, openssh-server and iscsitarget
+- changed SSH port number (22 > 2222) [/etc/ssh/sshd_config]
+- added service script 'set_iscsi_targets' (auto-start) [/etc/init.d/set_iscsi_targets]

@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# remove no longer needed packages
+apt-get autoremove
+
+# remove local repository packages
+apt-get clean
+
+# unset install settings
+rm /var/lib/dbus/machine-id
+rm /sbin/initctl
+dpkg-divert --rename --remove /sbin/initctl
+
+# unmount proc, sysfs and devpts in chroot
+umount /proc || umount -lf /proc
+umount /sys || umount -lf /sysfs
+umount /dev/pts || umount -lf /dev/pts
+
+# remove history
+rm -rf /tmp/* ~/.bash_history
+history -c
+
+echo ""
+echo Type exit to exit the chroot environment.
+echo ""

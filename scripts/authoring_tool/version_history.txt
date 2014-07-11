@@ -1,0 +1,17 @@
+rabe_authoring_tool-0.4:
+=========================
+- added NFS input and processing
+
+rabe_authoring_tool-0.3:
+=========================
+- added OpenVPN input and processing
+- added OpenVPN firewall rule
+
+rabe_authoring_tool-0.2:
+=========================
+- added network settings input and processing
+- added firewall rules input and processing
+
+rabe_authoring_tool-0.1:
+=========================
+- added main remastering commands

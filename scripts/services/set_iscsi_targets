@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# SERVICE: set_iscsi_targets
+# USAGE: start
+
+case "$1" in
+start)
+	echo \[set_iscsi_targets\] starting service
+	
+	# extract MAC address (eth0) from ifconfig
+	MAC=$(ifconfig eth0 | grep -i 'hwaddr' | awk '{print $5}' | sed 's/://g')
+	
+	# set counter
+	COUNTER=0
+	
+	echo \[set_iscsi_targets\] searching SCSI storage devices
+	
+	# search SCSI storage devices
+	for SCSI in $(ls /dev/sd* | grep 'sd[a-z]$')
+	do
+		DISK=$(echo $SCSI | sed 's/\/dev\///g')
+		
+		echo \[set_iscsi_targets\] setting iSCSI target $MAC:$DISK
+		
+		# add target to configuration file
+		echo Target $MAC:$DISK >> /etc/iet/ietd.conf
+		echo Lun $COUNTER Path=$SCSI,Type=fileio >> /etc/iet/ietd.conf
+		
+		# increase counter
+		COUNTER=$[ COUNTER+1 ]
+	done
+;;
+
+*)
+echo SERVICE: set_iscsi_targets
+echo $"USAGE: $0 {start}"
+exit 1
+
+esac
+exit 0

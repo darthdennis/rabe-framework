@@ -1,0 +1,49 @@
+#!/bin/bash
+
+# SERVICE: set_network_interfaces
+# USAGE: start/stop/restart
+
+case "$1" in
+start)
+	echo \[set_network_interfaces\] starting service
+	
+	echo \[set_network_interfaces\] bringing eth0 down
+	
+	# bring interface eth0 down
+	ifdown eth0
+	
+	echo \[set_network_interfaces\] adding new network settings for eth0
+	
+	# copy new interfaces file and overwrite old
+	cp /etc/network/interfaces_new /etc/network/interfaces
+	
+	echo \[set_network_interfaces\] bringing eth0 up
+	
+	# bring interface eth0 up
+	ifup eth0
+;;
+stop)
+	echo \[set_network_interfaces\] bringing eth0 down
+	
+	# bring interface eth0 down
+	ifdown eth0
+;;
+restart)
+	echo \[set_network_interfaces\] bringing eth0 down
+	
+	# bring interface eth0 down
+	ifdown eth0
+	
+	echo \[set_network_interfaces\] bringing eth0 up
+	
+	# bring interface eth0 up
+	ifup eth0
+;;
+
+*)
+echo SERVICE: set_network_interfaces
+echo $"USAGE: $0 {start/stop/restart}"
+exit 1
+
+esac
+exit 0
